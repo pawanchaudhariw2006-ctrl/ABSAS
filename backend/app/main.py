@@ -8,7 +8,7 @@ from api.endpoints import auth, predict
 from db import models
 from db.session import engine
 from sqlalchemy.exc import OperationalError
-
+    
 
 app = FastAPI(title="ABSAS Backend API")
 
