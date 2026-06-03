@@ -1,36 +1,8 @@
-# --- Virtual Environments ---
-venv/
-.venv/
-env/
-backend/venv/
-frontend/venv/
-
-# --- Python Cache ---
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.coverage
-htmlcov/
-
-# --- Environment Variables (Sensitive) ---
-.env
-
-# --- Docker ---
-.docker-build-log
-# Keep the docker-compose.yml and Dockerfile, but ignore local overrides if you use them
-docker-compose.override.yml
-
-# --- IDE & OS Files ---
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
 # --- Databases ---
 # If your MySQL stores data in a local folder, ignore it here
 mysql_data/
 *.sql
 *.sqlite
+*.db                  <-- ADD THIS LINE TO BLOCK ALL .db FILES
+absas_database.db     <-- OR ADD THIS TO SPECIFICALLY BLOCK YOUR DATABASE
 ABSADatasets/

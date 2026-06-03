@@ -1,76 +1,45 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
-
-# Import database infrastructure from your db/ folder
-from db.session import get_db
-from db.models import User  # Ensure your User class in models.py matches this
-
-# Import passlib for secure password hashing
-from passlib.context import CryptContext
-
-# Setup password hashing configuration
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.db.session import engine
+from app.db.models import User
+from app.schemas.auth import UserCreate, UserResponse
 
 router = APIRouter()
 
-# --- Pydantic Schemas for Validation ---
-class UserRegisterSchema(BaseModel):
-    email: EmailStr
-    password: str
+def get_db():
+    db = Session(bind=engine)
+    try:
+        yield db
+    finally:
+        db.close()
 
-class UserResponseSchema(BaseModel):
-    id: int
-    email: EmailStr
-
-    class Config:
-        from_attributes = True
-
-
-# --- API Endpoints ---
-
-# Change "/register" to "/signup" here:
-@router.post("/signup", response_model=UserResponseSchema, status_code=status.HTTP_201_CREATED)
-def signup(user_in: UserRegisterSchema, db: Session = Depends(get_db)):
+@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def signup(user_in: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_in.email).first()
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email is already registered."
-        )
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    # 2. Hash the user's password securely
-    hashed_pass = pwd_context.hash(user_in.password)
-    
-    # 3. Instantiate the SQLAlchemy model entry
-    new_user = User(
-        email=user_in.email,
-        hashed_password=hashed_pass  # Matches the column name in your models.py
-    )
-    
-    # 4. Save entry to the database
+    # NOTE: For production, hash the password using passlib/bcrypt!
+    new_user = User(email=user_in.email, hashed_password=user_in.password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
     return new_user
 
-
 @router.post("/login")
-def login(user_in: UserRegisterSchema, db: Session = Depends(get_db)):
-    # 1. Fetch user by email
-    user = db.query(User).filter(User.email == user_in.email).first()
-    if not user:
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # OAuth2PasswordRequestForm expects username and password fields fields
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or user.hashed_password != form_data.password:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or password."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 2. Verify hashed password match
-    if not pwd_context.verify(user_in.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or password."
-        )
-    
-    return {"message": "Login successful!", "user_id": user.id}
+    return {
+        "access_token": f"mock-token-for-{user.id}", 
+        "token_type": "bearer",
+        "user_id": user.id
+    }

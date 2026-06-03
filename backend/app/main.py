@@ -1,36 +1,38 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import time
 from fastapi import FastAPI
-from api.endpoints import auth, predict
-from db import models
-from db.session import engine
-from sqlalchemy.exc import OperationalError
-    
+from fastapi.middleware.cors import CORSMiddleware
+from app.db.session import engine, Base
+from app.db.models import User, Analysis 
+from app.api.endpoints import auth, analysis
 
-app = FastAPI(title="ABSAS Backend API")
+# Automatically initialize and create database tables on application startup
+Base.metadata.create_all(bind=engine)
 
-# Gracefully wait for MySQL container to fully initialize
-print("Connecting to MySQL database...")
-for i in range(10):  # Try 10 times
-    try:
-        models.Base.metadata.create_all(bind=engine)
-        print("Database tables created/synchronized successfully!")
-        break
-    except OperationalError as e:
-        print(f"Database not ready yet (attempt {i+1}/10). Error: {e}")
-        print("Retrying in 3 seconds...")
-        time.sleep(3)
-else:
-    print("Could not connect to the database. Exiting application.")
-    raise SystemExit(1)
+app = FastAPI(
+    title="Aspect-Based Sentiment Analysis System (ABSAS)",
+    description="Backend API supporting user authentication and fine-grained aspect-based sentiment analysis.",
+    version="1.0.0"
+)
 
-# Include your endpoint routers matching your folder setup
-app.include_router(auth.router, prefix="/api", tags=["Authentication"])
-app.include_router(predict.router, prefix="/api", tags=["Analysis"])
+# Configure CORS Middleware for frontend communication
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
-@app.get("/")
-def home():
-    return {"message": "Welcome to the Aspect-Based Sentiment Analysis System API"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["=*" ],
+    allow_headers=["*"],
+)
+
+@app.get("/", tags=["Health Check"])
+def read_root():
+    return {"status": "healthy", "project": "ABSAS API"}
+
+# FIX: Removed '.router' from both of these lines
+app.include_router(auth, prefix="", tags=["Authentication"])
+app.include_router(analysis, prefix="/analysis", tags=["Sentiment Analysis"])

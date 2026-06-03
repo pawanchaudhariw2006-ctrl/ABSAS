@@ -1,31 +1,15 @@
 version: '3.8'
 
 services:
-  db:
-    image: mysql:8.0
-    container_name: absas-db-1
-    restart: always
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-    ports:
-      - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build: ./backend
     container_name: absas-backend-1
     restart: always
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app  # Keeps your SQLite file safe on your host computer
     env_file:
       - .env
     environment:
-      - PYTHONPATH=/app/app
-    depends_on:
-      db:
-        condition: service_healthy
+      - PYTHONPATH=/app/app  # 👈 CHANGED THIS BACK to target your inner directory!

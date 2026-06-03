@@ -10,45 +10,63 @@ Features:
 
 Flowchart
 
-## System Architecture Flowchart
+## System Architecture Flowchart (Backend)
 
 ```text
-[ User / Frontend ]
-        │
-        ├── 1. Request: Send Text for Analysis 
-        │      (e.g., "The camera is great but the battery life is poor.")
-        ▼
-┌────────────────────────────────────────────────────────┐
-│               FastAPI Backend (App)                    │
-│                                                        │
-│  ┌─────────────────────────┐                           │
-│  │  POST /api/predict     │ ◄─── Requires Auth Token   │
-│  └───────────┬─────────────┘                           │
-└──────────────┼─────────────────────────────────────────┘
-               │
-               ▼
-┌────────────────────────────────────────────────────────┐
-│            Machine Learning Model Router               │
-│                                                        │
-│       Splits text into Aspects and Sentiments          │
-│       using your 2 selected models:                    │
-│                                                        │
-│       ├── Model 1 (Baseline: spaCy / Rule-based)       │
-│       └── Model 2 (Advanced: BERT / Transformer)       │
-└──────────────┬─────────────────────────────────────────┘
-               │
-               ├── 2. Extracts Results:
-               │      - Aspect 1: "camera"   -> Positive
-               │      - Aspect 2: "battery"  -> Negative
-               ▼
-┌────────────────────────────────────────────────────────┐
-│               Database Layer (MySQL)                   │
-│                                                        │
-│  ┌─────────────────────────┐                           │
-│  │  Analysis Results Table │ ─── Logs analysis history │
-│  └─────────────────────────┘     tied to the User ID   │
-└──────────────┬─────────────────────────────────────────┘
-               │
-               ├── 3. Returns Success Response Body
-               ▼
-[ User / Frontend UI ] ─── Displays Aspect-level breakdown charts
+[ Incoming HTTP Request ] ──► Body: { "text": "..." } | Header: Bearer <JWT>
+                  │
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 1. SECURITY MODULE (app/api/endpoints/auth.py)   │
+├──────────────────────────────────────────────────┤
+│ • Uses PyJWT & Passlib (Bcrypt) libraries        │
+│ • Validates cryptographic JWT signature          │
+└─────────────────┬────────────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 2. INGESTION ROUTER (app/api/endpoints/predict.py)
+├──────────────────────────────────────────────────┤
+│ • FastAPI POST `/api/` Endpoint                  │
+│ • Packages request payload for the ML pipeline   │
+└─────────────────┬────────────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 3. CORE NLP ENGINE (app/ml_model.py)             │
+├──────────────────────────────────────────────────┤
+│ Splits text array concurrently into 2 tracks:    │
+│                                                  │
+│ ├── Track A: spaCy (Grammar Baseline Engine)     │
+│ │                                                │
+│ └── Track B: BERT (Deep Learning Transformer)    │ 
+└─────────────────┬────────────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 4. SQLALCHEMY ORM (app/db/models.py & session.py)|
+├──────────────────────────────────────────────────┤
+│ • SQLAlchemy Database Engine instantiation       │
+│ • Binds the ML extraction data row directly with │
+│   the verified structural owner column: `user_id`│   
+└─────────────────┬────────────────────────────────┘
+                  │ 
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 5. DATABASE CONTAINER (absas-db-1 MySQL Engine)  │
+├──────────────────────────────────────────────────┤
+│ • Schema Enforcement (One-to-Many Relationship)  │
+│ • Permanently saves transaction history row      │
+│ • Verifies user index match via Foreign Key (FK) │
+└─────────────────┬────────────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────────────┐
+│ 6. RESPONSE SERIALIZATION (app/main.py Engine)   │
+├──────────────────────────────────────────────────┤
+│ • Packages data values using `AnalysisOutSchema` │
+│ • Filters out hidden database identity strings   │
+└─────────────────┬────────────────────────────────┘
+                  │
+                  ▼
+       [ HTTP 200 Success JSON Response ] ──► Sent to UI to build frontend charts
